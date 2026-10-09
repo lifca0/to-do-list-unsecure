@@ -1,8 +1,20 @@
-my_infra:
-  hosts:
-    app-dev:
-      ansible_host: 192.168.50.10
-    app-prod1:
-      ansible_host: 192.168.50.11
+all:
   vars:
     ansible_user: admin
+  children:
+    my_infra:
+      vars:
+        ufw_rules:
+          - { port: 80 }
+      hosts:
+        app-dev:
+          ansible_host: 192.168.50.10
+        app-prod1:
+          ansible_host: 192.168.50.11
+    ci:
+      vars:
+        ufw_rules:
+          - { port: 8080, from: 192.168.50.0/24 }
+      hosts:
+        jenkins:
+          ansible_host: 192.168.50.12
