@@ -3,6 +3,8 @@ To-Do-List application built with django to Create, Update and Delete tasks.
 <br>
 <br>
 
+CECI EST UN TEST
+
 > ⚠️ **WARNING - NE JAMAIS DEPLOYER EN PRODUCTION** ⚠️
 >
 > Cette application est **volontairement truffée de failles de sécurité** dans un cadre
