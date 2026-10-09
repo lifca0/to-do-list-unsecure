@@ -1,0 +1,113 @@
+---
+- name: Durcissement de base (SSH, UFW, mises à jour automatiques)
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Installer ufw et unattended-upgrades
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - unattended-upgrades
+          - apt-listchanges
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: SSH par clé uniquement, sans connexion root
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/00-hardening.conf
+        mode: "0644"
+        content: |
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin no
+          PubkeyAuthentication yes
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Restart ssh
+
+    - name: UFW, tout le trafic entrant refusé par défaut
+      community.general.ufw:
+        default: deny
+        direction: incoming
+
+    - name: UFW, trafic sortant autorisé
+      community.general.ufw:
+        default: allow
+        direction: outgoing
+
+    - name: UFW, autoriser SSH (avant l'activation, pour ne pas se couper)
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: UFW, autoriser les ports propres à la VM
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: tcp
+        from_ip: "{{ item.from | default('any') }}"
+      loop: "{{ ufw_rules | default([]) }}"
+
+    - name: UFW, activer le pare-feu
+      community.general.ufw:
+        state: enabled
+
+    - name: Mises à jour de sécurité automatiques
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+- name: Moindre privilège pour le compte Jenkins
+  hosts: ci
+  become: true
+
+  tasks:
+    - name: Compte jenkins sans shell et mot de passe verrouillé
+      ansible.builtin.user:
+        name: jenkins
+        shell: /usr/sbin/nologin
+        password_lock: true
+
+    - name: JENKINS_HOME fermé aux autres utilisateurs
+      ansible.builtin.file:
+        path: /var/lib/jenkins
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0750"
+
+    - name: Dossier du drop-in systemd
+      ansible.builtin.file:
+        path: /etc/systemd/system/jenkins.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Restrictions du service Jenkins
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/jenkins.service.d/hardening.conf
+        mode: "0644"
+        content: |
+          [Service]
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+          ProtectSystem=full
+      notify: Restart jenkins
+
+  handlers:
+    - name: Restart jenkins
+      ansible.builtin.systemd:
+        name: jenkins
+        daemon_reload: true
+        state: restarted
