@@ -1,0 +1,137 @@
+---
+- name: Déploiement de l'application todolist
+  hosts: my_infra
+  become: true
+  vars:
+    app_repo: https://github.com/lifca0/to-do-list-unsecure.git
+    app_branch: main
+    app_env: test
+    app_user: admin
+    app_dir: /opt/todolist
+    src_dir: "{{ app_dir }}/app"
+    venv_dir: "{{ app_dir }}/venv"
+
+  pre_tasks:
+    - name: La production ne peut recevoir que la branche main
+      ansible.builtin.assert:
+        that:
+          - app_env != 'prod' or app_branch == 'main'
+        fail_msg: "Refusé : la prod n'accepte que main (demandé : {{ app_branch }})"
+
+  tasks:
+    - name: Installer les paquets système
+      ansible.builtin.apt:
+        name:
+          - git
+          - python3-venv
+          - python3-pip
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Créer le répertoire de l'application
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Vérifier si les sources sont déjà un dépôt git
+      ansible.builtin.stat:
+        path: "{{ src_dir }}/.git"
+      register: git_dir
+
+    - name: Supprimer les anciennes sources copiées depuis le PC
+      ansible.builtin.file:
+        path: "{{ src_dir }}"
+        state: absent
+      when: not git_dir.stat.exists
+
+    - name: "Récupérer les sources depuis GitHub (branche {{ app_branch }})"
+      ansible.builtin.git:
+        repo: "{{ app_repo }}"
+        dest: "{{ src_dir }}"
+        version: "{{ app_branch }}"
+        force: true
+      become_user: "{{ app_user }}"
+      notify: Restart todolist
+
+    - name: Copier requirements.txt
+      ansible.builtin.copy:
+        src: requirements.txt
+        dest: "{{ app_dir }}/requirements.txt"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+
+    - name: Installer les dépendances dans un virtualenv
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ venv_dir }}"
+        virtualenv_command: python3 -m venv
+      become_user: "{{ app_user }}"
+      notify: Restart todolist
+
+    - name: Autoriser l'accès par IP (ALLOWED_HOSTS)
+      ansible.builtin.lineinfile:
+        path: "{{ src_dir }}/todo/settings.py"
+        regexp: '^ALLOWED_HOSTS'
+        line: "ALLOWED_HOSTS = ['*']"
+        insertafter: '^DEBUG'
+      notify: Restart todolist
+
+    - name: Appliquer les migrations Django
+      ansible.builtin.command:
+        cmd: "{{ venv_dir }}/bin/python manage.py migrate --noinput"
+        chdir: "{{ src_dir }}"
+      become_user: "{{ app_user }}"
+      register: migrate_result
+      changed_when: "'No migrations to apply' not in migrate_result.stdout"
+
+    - name: Installer le service systemd (Gunicorn sur le port 80)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/todolist.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Gunicorn - todolist
+          After=network.target
+
+          [Service]
+          User={{ app_user }}
+          Group={{ app_user }}
+          WorkingDirectory={{ src_dir }}
+          ExecStart={{ venv_dir }}/bin/gunicorn todo.wsgi:application --bind 0.0.0.0:80 --workers 2
+          AmbientCapabilities=CAP_NET_BIND_SERVICE
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart todolist
+
+    - name: Activer et démarrer le service
+      ansible.builtin.systemd:
+        name: todolist
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Appliquer les redémarrages en attente avant le test final
+      ansible.builtin.meta: flush_handlers
+
+    - name: Vérifier que l'application est accessible
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}"
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      register: health
+      retries: 6
+      delay: 5
+      until: health.status == 200
+
+  handlers:
+    - name: Restart todolist
+      ansible.builtin.systemd:
+        name: todolist
+        state: restarted
