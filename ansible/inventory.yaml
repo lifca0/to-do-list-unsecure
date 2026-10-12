@@ -5,7 +5,7 @@ all:
     my_infra:
       vars:
         ufw_rules:
-          - { port: 80 }
+          - { port: 80, from: 192.168.50.0/24 }
       hosts:
         app-dev:
           ansible_host: 192.168.50.10
