@@ -18,3 +18,9 @@ all:
       hosts:
         jenkins:
           ansible_host: 192.168.50.12
+    monitoring:
+      vars:
+        ufw_rules: []
+      hosts:
+        monitoring:
+          ansible_host: 192.168.50.13
