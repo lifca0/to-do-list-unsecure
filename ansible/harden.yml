@@ -41,7 +41,8 @@
         rule: allow
         port: "22"
         proto: tcp
-        from_ip: "{{ ssh_allowed_from | default('any') }}"
+        from_ip: "{{ item }}"
+      loop: "{{ ssh_allowed_from | default(['any']) }}"
 
     - name: UFW, autoriser les ports propres à la VM
       community.general.ufw:

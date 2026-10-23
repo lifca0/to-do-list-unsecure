@@ -27,7 +27,9 @@ all:
           - { port: 3000, from: 192.168.50.0/24 }
           - { port: 9090, from: 192.168.50.0/24 }
           - { port: 3100, from: 192.168.50.0/24 }
-        ssh_allowed_from: 192.168.50.0/24
+        ssh_allowed_from:
+          - 192.168.50.0/24
+          - 10.0.2.0/24
       hosts:
         monitoring:
           ansible_host: 192.168.50.13
