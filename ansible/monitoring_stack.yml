@@ -105,7 +105,8 @@
         admin reset-admin-password {{ grafana_admin_password }}
       changed_when: true
       no_log: true
-        - name: Créer le dossier des dashboards provisionnés
+    
+    - name: Créer le dossier des dashboards provisionnés
           ansible.builtin.file:
             path: /var/lib/grafana/dashboards
             state: directory
