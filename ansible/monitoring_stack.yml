@@ -105,40 +105,40 @@
         admin reset-admin-password {{ grafana_admin_password }}
       changed_when: true
       no_log: true
-    
+
     - name: Créer le dossier des dashboards provisionnés
-          ansible.builtin.file:
-            path: /var/lib/grafana/dashboards
-            state: directory
-            owner: grafana
-            group: grafana
-            mode: "0755"
+      ansible.builtin.file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: "0755"
 
-        - name: Déployer le dashboard de sécurité
-          ansible.builtin.copy:
-            src: files/dashboards/security-dashboard.json
-            dest: /var/lib/grafana/dashboards/security-dashboard.json
-            owner: grafana
-            group: grafana
-            mode: "0644"
-          notify: Restart grafana
+    - name: Déployer le dashboard de sécurité
+      ansible.builtin.copy:
+        src: files/dashboards/security-dashboard.json
+        dest: /var/lib/grafana/dashboards/security-dashboard.json
+        owner: grafana
+        group: grafana
+        mode: "0644"
+      notify: Restart grafana
 
-        - name: Provisionner le chargement automatique des dashboards
-          ansible.builtin.copy:
-            dest: /etc/grafana/provisioning/dashboards/dashboards.yml
-            mode: "0644"
-            content: |
-              apiVersion: 1
-              providers:
-                - name: default
-                  orgId: 1
-                  folder: ""
-                  type: file
-                  disableDeletion: false
-                  updateIntervalSeconds: 30
-                  options:
-                    path: /var/lib/grafana/dashboards
-          notify: Restart
+    - name: Provisionner le chargement automatique des dashboards
+      ansible.builtin.copy:
+        dest: /etc/grafana/provisioning/dashboards/dashboards.yml
+        mode: "0644"
+        content: |
+          apiVersion: 1
+          providers:
+            - name: default
+              orgId: 1
+              folder: ""
+              type: file
+              disableDeletion: false
+              updateIntervalSeconds: 30
+              options:
+                path: /var/lib/grafana/dashboards
+      notify: Restart grafana
 
   handlers:
     - name: Restart prometheus
@@ -150,4 +150,3 @@
       ansible.builtin.systemd:
         name: grafana-server
         state: restarted
-
