@@ -16,3 +16,17 @@
         name: prometheus-node-exporter
         enabled: true
         state: started
+  
+    - name: Activer le collecteur systemd de node_exporter
+      ansible.builtin.lineinfile:
+        path: /etc/default/prometheus-node-exporter
+        regexp: '^ARGS='
+        line: 'ARGS="--collector.systemd"'
+        create: true
+      notify: Restart node_exporter
+
+  handlers:
+    - name: Restart node_exporter
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: restarted
