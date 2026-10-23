@@ -1,0 +1,67 @@
+---
+- name: Installer et configurer Promtail (expedition des logs vers Loki)
+  hosts: my_infra:ci
+  become: true
+
+  tasks:
+    - name: Ajouter la clé GPG officielle de Grafana
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg.key
+        dest: /etc/apt/keyrings/grafana.asc
+        mode: "0644"
+
+    - name: Ajouter le dépôt APT officiel de Grafana
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+        state: present
+        filename: grafana
+
+    - name: Installer Promtail (paquet officiel)
+      ansible.builtin.apt:
+        name: promtail
+        state: present
+        update_cache: true
+
+    - name: Ajouter l'utilisateur promtail au groupe systemd-journal
+      ansible.builtin.user:
+        name: promtail
+        groups: systemd-journal
+        append: true
+
+    - name: Configurer Promtail
+      ansible.builtin.copy:
+        dest: /etc/promtail/config.yml
+        mode: "0644"
+        content: |
+          server:
+            http_listen_port: 9080
+            grpc_listen_port: 0
+
+          positions:
+            filename: /var/lib/promtail/positions.yaml
+
+          clients:
+            - url: http://192.168.50.13:3100/loki/api/v1/push
+
+          scrape_configs:
+            - job_name: journal
+              journal:
+                max_age: 12h
+                labels:
+                  host: "{{ inventory_hostname }}"
+              relabel_configs:
+                - source_labels: ["__journal__systemd_unit"]
+                  target_label: unit
+      notify: Restart promtail
+
+    - name: Activer et démarrer Promtail
+      ansible.builtin.systemd:
+        name: promtail
+        enabled: true
+        state: started
+
+  handlers:
+    - name: Restart promtail
+      ansible.builtin.systemd:
+        name: promtail
+        state: restarted
