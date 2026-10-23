@@ -1,0 +1,82 @@
+---
+- name: Installer et configurer Prometheus + Grafana
+  hosts: monitoring
+  become: true
+  vars:
+    grafana_admin_password: "{{ vault_grafana_admin_password }}"
+
+  tasks:
+    - name: Installer Prometheus (paquet officiel Debian)
+      ansible.builtin.apt:
+        name: prometheus
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ajouter la clé GPG officielle de Grafana
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg.key
+        dest: /etc/apt/keyrings/grafana.asc
+        mode: "0644"
+
+    - name: Ajouter le dépôt APT officiel de Grafana
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+        state: present
+        filename: grafana
+
+    - name: Installer Grafana (paquet officiel)
+      ansible.builtin.apt:
+        name: grafana
+        state: present
+        update_cache: true
+
+    - name: Configurer Prometheus (scrape config)
+      ansible.builtin.copy:
+        dest: /etc/prometheus/prometheus.yml
+        mode: "0644"
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: prometheus
+              static_configs:
+                - targets: ["localhost:9090"]
+
+            - job_name: app-dev
+              static_configs:
+                - targets: ["192.168.50.10:9100"]
+
+            - job_name: app-prod1
+              static_configs:
+                - targets: ["192.168.50.11:9100"]
+
+            - job_name: jenkins
+              static_configs:
+                - targets: ["192.168.50.12:9100"]
+      notify: Restart prometheus
+
+    - name: Activer et démarrer Prometheus
+      ansible.builtin.systemd:
+        name: prometheus
+        enabled: true
+        state: started
+
+    - name: Activer et démarrer Grafana
+      ansible.builtin.systemd:
+        name: grafana-server
+        enabled: true
+        state: started
+
+    - name: Changer le mot de passe admin Grafana
+      ansible.builtin.command: "grafana-cli admin reset-admin-password {{ grafana_admin_password }}"
+      changed_when: true
+      no_log: true
+
+  handlers:
+    - name: Restart prometheus
+      ansible.builtin.systemd:
+        name: prometheus
+        state: restarted
+
