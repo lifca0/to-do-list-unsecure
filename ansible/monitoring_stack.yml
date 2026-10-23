@@ -70,7 +70,9 @@
         state: started
 
     - name: Changer le mot de passe admin Grafana
-      ansible.builtin.command: "grafana-cli admin reset-admin-password {{ grafana_admin_password }}"
+      ansible.builtin.command: >
+        grafana cli --homepath "/usr/share/grafana"
+        admin reset-admin-password {{ grafana_admin_password }}
       changed_when: true
       no_log: true
 
