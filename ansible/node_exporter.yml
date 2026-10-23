@@ -1,0 +1,18 @@
+---
+- name: Installer node_exporter pour la supervision Prometheus
+  hosts: my_infra:ci
+  become: true
+
+  tasks:
+    - name: Installer node_exporter (paquet officiel Debian)
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Activer et démarrer node_exporter
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        enabled: true
+        state: started

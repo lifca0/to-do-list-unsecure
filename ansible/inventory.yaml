@@ -7,6 +7,7 @@ all:
       vars:
         ufw_rules:
           - { port: 80, from: 192.168.50.0/24 }
+          - { port: 9100, from: 192.168.50.13/32 }
       hosts:
         app-dev:
           ansible_host: 192.168.50.10
@@ -16,6 +17,7 @@ all:
       vars:
         ufw_rules:
           - { port: 8080, from: 192.168.50.0/24 }
+          - { port: 9100, from: 192.168.50.13/32 }
       hosts:
         jenkins:
           ansible_host: 192.168.50.12
